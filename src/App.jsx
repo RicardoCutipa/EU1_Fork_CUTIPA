@@ -1,7 +1,8 @@
+import assets from "./data/assets.json";
+import { evaluateAsset } from "./services/AiService";
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Button, Form, Input, Popconfirm, Table, Modal, Layout, Menu, Typography, message } from 'antd';
+import { Button, Form, Input, Popconfirm, Table, Modal, Layout, Typography, message } from 'antd';
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
-import axios from 'axios';
 import Login from './components/Login';
 import { isAuthenticated, logout } from './services/LoginService';
 
@@ -65,25 +66,16 @@ const EditableCell = ({
   if (editable) {
     childNode = editing ? (
       <Form.Item
-        style={{
-          margin: 0,
-        }}
+        style={{ margin: 0 }}
         name={dataIndex}
-        rules={[
-          {
-            required: true,
-            message: `${title} is required.`,
-          },
-        ]}
+        rules={[{ required: true, message: `${title} is required.` }]}
       >
         <Input ref={inputRef} onPressEnter={save} onBlur={save} />
       </Form.Item>
     ) : (
       <div
         className="editable-cell-value-wrap"
-        style={{
-          paddingRight: 24,
-        }}
+        style={{ paddingRight: 24 }}
         onClick={toggleEdit}
       >
         {children}
@@ -117,16 +109,23 @@ const App = () => {
   // Application state
   const [isLoading, setIsLoading] = useState(false);
   const [isRecommending, setIsRecommending] = useState(false);
-  const [suggestEnabled, setSuggestEnabled] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [dataSource, setDataSource] = useState([]);
-  const [count, setCount] = useState(1);
-  const [newData, setNewData] = useState({
-    activo: '',
-    riesgo: '',
-    impacto: '',
-    tratamiento: ''
-  });
+  
+  const [dataSource, setDataSource] = useState(
+    assets.map((a, index) => {
+      const r = evaluateAsset(a);
+      return {
+        key: index + 1,
+        activo: r.activo,
+        riesgo: r.probabilidad,
+        impacto: r.impacto,
+        tratamiento: "-"
+      };
+    })
+  );
+  
+  const [count, setCount] = useState(dataSource.length + 1);
+  const [newData, setNewData] = useState({ activo: '' });
 
   // Show modal for adding new asset
   const showModal = () => {
@@ -140,11 +139,10 @@ const App = () => {
   
   // Handle deletion of a row
   const handleDelete = (key) => {
-    const newData = dataSource.filter((item) => item.key !== key);
-    setDataSource(newData);
+    setDataSource(dataSource.filter((item) => item.key !== key));
   };
 
-  // Handle adding new asset (mock API call)
+  // Handle adding new asset
   const handleOk = () => {
     if (!newData.activo.trim()) {
       message.error('Por favor ingresa un nombre de activo');
@@ -153,78 +151,48 @@ const App = () => {
 
     setIsLoading(true);
 
-    // Mock API call with timeout
     setTimeout(() => {
-      // Generate mock risks and impacts (but only use the first one)
-      const mockRiesgo = `Pérdida de ${newData.activo}`;
-      const mockImpacto = `Pérdida de información valiosa relacionada con ${newData.activo}`;
-
-      // Add a single row for this asset
-      addNewRow(newData.activo, mockRiesgo, mockImpacto);
+      const newRow = {
+        key: count,
+        activo: newData.activo,
+        riesgo: 'Media',
+        impacto: 'Medio',
+        tratamiento: '-'
+      };
+      
+      setDataSource([...dataSource, newRow]);
+      setCount(count + 1);
       
       setIsModalVisible(false);
       setIsLoading(false);
-      setSuggestEnabled(true);
+      setNewData({ activo: '' });
       message.success(`Activo "${newData.activo}" agregado con éxito`);
     }, 1000);
   };
 
-  // Add a single new row to the table
-  const addNewRow = (activo, riesgo, impacto) => {
-    // Create a single new row
-    const newRow = {
-      key: `${count}`,
-      activo,
-      riesgo,
-      impacto,
-      tratamiento: '-'
-    };
-    
-    // Add the single row to the dataSource
-    setDataSource([...dataSource, newRow]);
-    
-    // Increment count by 1
-    setCount(count + 1);
-    
-    // Reset form
-    setNewData({
-      activo: '',
-      riesgo: '',
-      impacto: '',
-      tratamiento: ''
-    });
-  };
-
-  // Handle recommendation of treatments (mock API call)
+  // Handle recommendation of treatments
   const handleRecommendTreatment = () => {
     if (dataSource.length === 0) {
-      message.warning('No hay riesgos para recomendar tratamientos');
+      message.warning("No hay activos para recomendar tratamientos");
       return;
     }
-
+  
     setIsRecommending(true);
-    
-    // Mock API call with timeout
+  
     setTimeout(() => {
-      const treatments = [
-        'Implementación de controles de acceso físico',
-        'Copias de seguridad periódicas',
-        'Cifrado de datos sensibles',
-        'Capacitación de personal sobre seguridad',
-        'Implementación de firewall de nueva generación',
-        'Monitoreo continuo de accesos',
-        'Desarrollo de políticas de seguridad'
-      ];
-      
-      const newDataSource = dataSource.map(item => ({
-        ...item,
-        tratamiento: treatments[Math.floor(Math.random() * treatments.length)]
-      }));
-      
+      const newDataSource = dataSource.map((item) => {
+        const asset = assets.find(a => a.name === item.activo) || { name: item.activo, type: 'General', criticality: 'Media' };
+        const evalResult = evaluateAsset(asset);
+        return {
+          ...item,
+          tratamiento: evalResult.recomendaciones.join("; ")
+        };
+      });
+  
       setDataSource(newDataSource);
       setIsRecommending(false);
-      message.success('Tratamientos recomendados con éxito');
-    }, 1500);
+      message.success("Tratamientos recomendados aplicados con éxito");
+    }, 1000);
   };
 
   // Handle save after cell edit
@@ -232,39 +200,16 @@ const App = () => {
     const newData = [...dataSource];
     const index = newData.findIndex((item) => row.key === item.key);
     const item = newData[index];
-    newData.splice(index, 1, {
-      ...item,
-      ...row,
-    });
+    newData.splice(index, 1, { ...item, ...row });
     setDataSource(newData);
   };
 
   // Define table columns
   const defaultColumns = [
-    {
-      title: 'Activo',
-      dataIndex: 'activo',
-      width: '15%',
-      editable: true,
-    },
-    {
-      title: 'Riesgo',
-      dataIndex: 'riesgo',
-      width: '20%',
-      editable: true,
-    },
-    {
-      title: 'Impacto',
-      dataIndex: 'impacto',
-      width: '30%',
-      editable: true,
-    },
-    {
-      title: 'Tratamiento',
-      dataIndex: 'tratamiento',
-      width: '30%',
-      editable: true,
-    },
+    { title: 'Activo', dataIndex: 'activo', width: '20%', editable: true },
+    { title: 'Riesgo', dataIndex: 'riesgo', width: '15%', editable: true },
+    { title: 'Impacto', dataIndex: 'impacto', width: '25%', editable: true },
+    { title: 'Tratamiento', dataIndex: 'tratamiento', width: '30%', editable: true },
     {
       title: 'Operación',
       dataIndex: 'operation',
@@ -278,72 +223,34 @@ const App = () => {
     },
   ];
 
-  // Set up table components
-  const components = {
-    body: {
-      row: EditableRow,
-      cell: EditableCell,
-    },
-  };
+  const components = { body: { row: EditableRow, cell: EditableCell } };
 
-  // Configure columns for editing
   const columns = defaultColumns.map((col) => {
-    if (!col.editable) {
-      return col;
-    }
+    if (!col.editable) return col;
     return {
       ...col,
-      onCell: (record) => ({
-        record,
-        editable: col.editable,
-        dataIndex: col.dataIndex,
-        title: col.title,
-        handleSave,
-      }),
+      onCell: (record) => ({ record, editable: col.editable, dataIndex: col.dataIndex, title: col.title, handleSave }),
     };
   });
 
-  // If not authenticated, show the login page
   if (!authenticated) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
   
-  // If authenticated, show the app with header and content
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 24px' }}>
+        <Title level={4} style={{ color: 'white', margin: 0 }}>Sistema de Auditoría de Riesgos</Title>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Title level={4} style={{ color: 'white', margin: 0 }}>Sistema de Auditoría de Riesgos</Title>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <Text style={{ color: 'white', marginRight: 16 }}>
-            <UserOutlined /> {currentUser}
-          </Text>
-          <Button 
-            type="link" 
-            icon={<LogoutOutlined />} 
-            onClick={handleLogout}
-            style={{ color: 'white' }}
-          >
-            Cerrar Sesión
-          </Button>
+          <Text style={{ color: 'white', marginRight: 16 }}><UserOutlined /> {currentUser}</Text>
+          <Button type="primary" icon={<LogoutOutlined />} onClick={handleLogout}>Cerrar Sesión</Button>
         </div>
       </Header>
       
-      <Content style={{ padding: '24px', background: '#fff' }}>
-        <div>
-          <Button onClick={showModal} type="primary" style={{ marginBottom: 16 }}>
-            + Agregar activo
-          </Button>
-          <Button 
-            onClick={handleRecommendTreatment} 
-            type="primary" 
-            loading={isRecommending} 
-            disabled={!suggestEnabled} 
-            style={{ marginBottom: 16, marginLeft: 8 }}
-          >
-            Recomendar tratamientos
-          </Button>
+      <Content style={{ padding: '24px' }}>
+        <div style={{ background: '#fff', padding: 24, borderRadius: 8 }}>
+          <Button onClick={showModal} type="primary" style={{ marginBottom: 16 }}>+ Agregar activo</Button>
+          <Button onClick={handleRecommendTreatment} loading={isRecommending} style={{ marginBottom: 16, marginLeft: 8 }}>Recomendar tratamientos</Button>
           
           <Modal
             title="Agregar nuevo activo"
@@ -355,12 +262,8 @@ const App = () => {
             confirmLoading={isLoading}
           >
             <Form layout="vertical">
-              <Form.Item 
-                label="Activo" 
-                rules={[{ required: true, message: 'Por favor ingresa un nombre de activo' }]}
-              >
+              <Form.Item label="Activo" required>
                 <Input 
-                  name="activo" 
                   value={newData.activo} 
                   onChange={(e) => setNewData({ ...newData, activo: e.target.value })}
                   placeholder="Ej: Base de datos de clientes" 
@@ -375,7 +278,11 @@ const App = () => {
             bordered
             dataSource={dataSource}
             columns={columns}
+            pagination={{ pageSize: 10 }}
           />
+
+          {/* LA LÍNEA DE CÓDIGO <Evaluations /> FUE ELIMINADA DE AQUÍ */}
+
         </div>
       </Content>
       

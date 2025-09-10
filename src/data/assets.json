@@ -1,0 +1,33 @@
+[
+    {
+      "name": "Base de Datos Clientes",
+      "type": "Base de Datos",
+      "description": "Contiene datos sensibles de clientes",
+      "criticality": "Alta"
+    },
+    {
+      "name": "Aplicación Web de Banca",
+      "type": "Aplicación",
+      "description": "Portal principal de clientes",
+      "criticality": "Alta"
+    },
+    {
+      "name": "Backup NAS Central",
+      "type": "Almacenamiento",
+      "description": "Sistema de respaldo de la organización",
+      "criticality": "Media"
+    },
+    {
+      "name": "Firewall Perimetral",
+      "type": "Infraestructura",
+      "description": "Dispositivo de seguridad de red",
+      "criticality": "Media"
+    },
+    {
+      "name": "Módulo KYC",
+      "type": "Aplicación",
+      "description": "Proceso de verificación de identidad",
+      "criticality": "Alta"
+    }
+  ]
+  
