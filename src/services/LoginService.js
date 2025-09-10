@@ -1,7 +1,7 @@
 // Simple authentication service with hardcoded credentials
 const credentials = {
-  username: "admin",
-  password: "123456"
+  username: "auditor",
+  password: "auditorPass.2025" // Contraseña actualizada
 };
 
 // Login function that returns a promise
@@ -42,4 +42,3 @@ export default {
   isAuthenticated,
   logout
 };
-
